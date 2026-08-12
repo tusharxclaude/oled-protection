@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Build .app
+        working-directory: OLEDGuard
+        run: ./build.sh
+
+      - name: Zip .app
+        working-directory: OLEDGuard
+        run: ditto -c -k --sequesterRsrc --keepParent OLEDGuard.app OLEDGuard.zip
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: OLEDGuard/OLEDGuard.zip
+          generate_release_notes: true
