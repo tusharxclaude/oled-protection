@@ -52,8 +52,21 @@ final class IdleClock {
     }
 
     /// Returns false if Input Monitoring permission is missing.
+    ///
+    /// `CGEvent.tapCreate` alone can't detect this: a listen-only session
+    /// tap is created successfully even without Input Monitoring access,
+    /// and mouse events still flow through it — only keyDown/keyUp/
+    /// flagsChanged are silently withheld by the OS. Checking tapCreate's
+    /// result alone made the clock look alive (it reset on mouse input)
+    /// while being permanently blind to typing. `CGPreflightListenEventAccess`
+    /// is the actual authorization check; `CGRequestListenEventAccess`
+    /// additionally triggers the system prompt the first time.
     @discardableResult
     func start() -> Bool {
+        guard CGPreflightListenEventAccess() || CGRequestListenEventAccess() else {
+            return false
+        }
+
         var mask: CGEventMask = 0
         for type in Self.eventsOfInterest {
             mask |= (1 << type.rawValue)
