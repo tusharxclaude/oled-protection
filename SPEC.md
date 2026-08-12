@@ -15,8 +15,8 @@ Native macOS menu bar app to protect a 34" OLED ultrawide (Dell/Alienware AW3426
 
 - Custom idle clock, not the system's built-in idle timer (Amphetamine's "move mouse cursor" feature resets that on purpose).
 - Listen-only `CGEventTap` observing all mouse/keyboard events.
-- Filter out synthetic input by checking `kCGEventSourceUnixProcessID` per event — real hardware events report PID 0/self; injected events report the injecting process's PID (same mechanism WindowServer itself uses to gate synthetic events).
-- **⚠️ OPEN — needs POC before relying on it**: build a throwaway CLI event-tap logger, trigger Amphetamine's cursor-jiggle, confirm its events are attributable and filterable. Unconfirmed risk: Amphetamine may use a lower-level API (e.g. `CGWarpMouseCursorPosition`) that bypasses the event tap entirely.
+- Filter out synthetic input by checking `kCGEventSourceUnixProcessID` per event — accept only events where it's `0` (real hardware); reject everything else. This is an allow-list, not a deny-list keyed to Amphetamine's PID specifically — PIDs are assigned per-launch and aren't stable across an app restart. Cross-check with `kCGEventSourceStateID` (`1` = `kCGEventSourceStateHIDSystemState` for real hardware, `0` = `kCGEventSourceStateCombinedSessionState` for `CGEventPost`-injected events) as a second, harder-to-spoof signal.
+- **✅ RESOLVED via POC** (`poc/eventtap-logger/`, 2026-08-12): confirmed Amphetamine's cursor-jiggle events report `sourcePID=<Amphetamine's PID>, sourceStateID=0`; real mouse/keyboard input reports `sourcePID=0, sourceStateID=1`. The two are cleanly distinguishable — Amphetamine does not bypass the event tap via a lower-level API.
 
 ## Feature 1 — Idle Blackout
 
@@ -24,7 +24,9 @@ Native macOS menu bar app to protect a 34" OLED ultrawide (Dell/Alienware AW3426
 - Overlay: true black (`RGB 0,0,0`) full-screen window — zero photon emission, strictly better than any video loop.
 - Scope: **user-selected OLED displays only** (manual toggle per display in prefs — no EDID-based auto-detection; macOS has no public "is this OLED" API, and a lookup table isn't worth maintaining for one monitor).
 - Dismiss: any real (filtered) mouse/keyboard input → instant, no fade (OLED pixels switch near-instantly; a fade adds cost with no visual benefit).
-- Exemption: active media playback (via private `MediaRemote` framework — undocumented, no Apple guarantee across OS updates, same risk category as the PID-filtering approach).
+- Exemption: **meetings only, not general media playback** — checks whether the default input device is actively captured (`kAudioDevicePropertyDeviceIsRunningSomewhere` via CoreAudio, a public API). Chosen over the originally-considered private `MediaRemote` framework because `MediaRemote` reports *any* media playback (e.g. a YouTube video), which is broader than "in a meeting." Mic-active is used as a proxy for "meeting in progress" rather than identifying the specific app.
+  - **Assumption to verify**: meeting apps (Teams/Zoom/etc.) keep the input device open while locally muted, for near-instant unmute — if an app instead releases the device on mute, muted meetings won't be exempted. Untested against real Teams usage.
+  - **Known gap**: only checks the system *default* input device — a meeting app using a non-default mic (headset selected only inside that app) won't be caught.
 - No notification-driven wake (system/app notification sounds already alert you).
 
 ## Feature 2 — Auto-Minimize Static Windows
@@ -55,5 +57,5 @@ Native macOS menu bar app to protect a 34" OLED ultrawide (Dell/Alienware AW3426
 
 ## Open Risks Requiring a POC
 
-1. **Amphetamine synthetic-input filtering** — validate `kCGEventSourceUnixProcessID` approach actually catches Amphetamine's injected events before building the idle clock on top of it.
+1. ~~**Amphetamine synthetic-input filtering**~~ — resolved, see Idle Detection section above.
 2. **`MediaRemote` reliability** — private/undocumented framework; confirm it correctly reports now-playing state for your actual media sources (browser tabs, apps) and monitor for breakage across macOS updates.
