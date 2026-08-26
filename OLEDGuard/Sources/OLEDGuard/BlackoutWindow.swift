@@ -1,8 +1,12 @@
 import AppKit
 
-/// Guaranteed dismiss path: standard AppKit keyDown handling, independent
-/// of the CGEventTap/Input Monitoring permission entirely. Borderless
-/// windows can't become key by default, so that's overridden here.
+/// Fallback dismiss path for when Input Monitoring has lapsed after launch:
+/// standard AppKit keyDown handling, independent of the CGEventTap
+/// entirely. Only reached when BlackoutController deliberately makes this
+/// window key (see its `show(on:)`) — normally the event tap dismisses
+/// blackout on any real input, Escape included, without this ever firing.
+/// Borderless windows can't become key by default, so that's overridden
+/// here.
 final class BlackoutWindow: NSWindow {
     var onEscape: (() -> Void)?
 
