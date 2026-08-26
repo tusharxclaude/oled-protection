@@ -2,12 +2,12 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-swift build -c release
+swift build -c release --arch arm64 --arch x86_64
 
 APP=OLEDGuard.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp .build/release/OLEDGuard "$APP/Contents/MacOS/OLEDGuard"
+cp .build/apple/Products/Release/OLEDGuard "$APP/Contents/MacOS/OLEDGuard"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
