@@ -18,8 +18,12 @@ cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # free "Apple Development" identity has a stable Team ID, so the grant
 # survives rebuilds/updates. Falls back to ad-hoc if neither is installed
 # (e.g. on CI), matching the previous behavior.
+# The `|| true` on the grep stage matters: under `set -eo pipefail`, grep's
+# exit 1 on "no match" (the normal case on CI, which has no identity
+# installed) would otherwise kill the script before it reaches the ad-hoc
+# fallback below.
 SIGN_IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
-    | grep -o '"Developer ID Application:[^"]*"\|"Apple Development:[^"]*"' \
+    | { grep -o '"Developer ID Application:[^"]*"\|"Apple Development:[^"]*"' || true; } \
     | head -1 | tr -d '"')"
 
 if [ -z "$SIGN_IDENTITY" ]; then
