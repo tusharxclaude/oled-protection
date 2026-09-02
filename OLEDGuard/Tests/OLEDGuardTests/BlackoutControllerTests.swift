@@ -86,32 +86,24 @@ final class BlackoutControllerTests: XCTestCase {
         XCTAssertEqual(escapeFireCount, 1)
     }
 
-    func testShowDoesNotActivateOrGrabKeyWhenInputMonitoringGranted() throws {
+    func testShowDoesNotGrabKeyWhenInputMonitoringGranted() throws {
         let screens = try requireScreens()
-        var activated = false
-        let controller = BlackoutController(
-            hasInputMonitoringAccess: { true },
-            activateApp: { activated = true }
-        )
+        let controller = BlackoutController(hasInputMonitoringAccess: { true })
 
         controller.show(on: screens)
 
-        XCTAssertFalse(activated)
+        XCTAssertFalse(controller.isAnyWindowKey)
 
         controller.hide()
     }
 
-    func testShowActivatesAndGrabsKeyWhenInputMonitoringMissing() throws {
+    func testShowGrabsKeyWhenInputMonitoringMissing() throws {
         let screens = try requireScreens()
-        var activated = false
-        let controller = BlackoutController(
-            hasInputMonitoringAccess: { false },
-            activateApp: { activated = true }
-        )
+        let controller = BlackoutController(hasInputMonitoringAccess: { false })
 
         controller.show(on: screens)
 
-        XCTAssertTrue(activated)
+        XCTAssertTrue(controller.isAnyWindowKey)
 
         controller.hide()
     }
