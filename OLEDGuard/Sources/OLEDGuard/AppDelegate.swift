@@ -87,6 +87,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             return
         }
 
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(rebuildMenu),
+            name: NSApplication.didChangeScreenParametersNotification, object: nil
+        )
+
         pollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.tick()
         }
@@ -119,6 +124,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func tick() {
         let selectedScreens = selectedScreensProvider()
         guard !selectedScreens.isEmpty else { return }
+
+        idleClock.pollSecureInputFallback()
 
         if isPaused, BlackoutPolicy.isPauseExpired(pauseExpiresAt: pauseExpiresAt, now: now()) {
             expirePause()
@@ -181,7 +188,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         NSApp.terminate(nil)
     }
 
-    private func rebuildMenu() {
+    /// Also re-run on `NSApplication.didChangeScreenParametersNotification`
+    /// (see `applicationDidFinishLaunching`) so a display attached/detached
+    /// after launch shows up in "OLED Displays" without a relaunch.
+    @objc private func rebuildMenu() {
         let menu = NSMenu()
 
         menu.addItem(withTitle: "OLED Displays", action: nil, keyEquivalent: "").isEnabled = false

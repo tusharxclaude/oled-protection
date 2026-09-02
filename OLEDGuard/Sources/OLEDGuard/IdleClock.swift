@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import CoreGraphics
 import Foundation
 
@@ -15,6 +16,14 @@ final class IdleClock {
     /// deterministically; defaults to the real system clock.
     private let now: () -> Date
 
+    /// Injectable for `pollSecureInputFallback` tests; default checks the
+    /// real macOS Secure Input Mode state.
+    private let isSecureInputActive: () -> Bool
+
+    /// Injectable for `pollSecureInputFallback` tests; default reads the
+    /// real HID-sourced last-keyDown timestamp.
+    private let secondsSinceLastKeyDown: () -> TimeInterval
+
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
@@ -25,13 +34,38 @@ final class IdleClock {
         .keyDown, .keyUp, .flagsChanged, .scrollWheel,
     ]
 
-    init(now: @escaping () -> Date = Date.init) {
+    init(
+        now: @escaping () -> Date = Date.init,
+        isSecureInputActive: @escaping () -> Bool = IsSecureEventInputEnabled,
+        secondsSinceLastKeyDown: @escaping () -> TimeInterval = {
+            CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown)
+        }
+    ) {
         self.now = now
+        self.isSecureInputActive = isSecureInputActive
+        self.secondsSinceLastKeyDown = secondsSinceLastKeyDown
         self.lastRealInputDate = now()
     }
 
     var idleInterval: TimeInterval {
         now().timeIntervalSince(lastRealInputDate)
+    }
+
+    /// Polled fallback for the window where macOS Secure Input Mode blinds
+    /// the CGEventTap to every keyDown/keyUp/flagsChanged system-wide
+    /// (Apple TN2150) — typing into a password field or Terminal would
+    /// otherwise never reset the clock and could black out mid-keystroke.
+    ///
+    /// Only consulted while Secure Input is active. Outside that window
+    /// the tap's per-event hardware-source filtering (`isRealHardwareInput`)
+    /// is strictly better at rejecting synthetic input (e.g. Amphetamine's
+    /// jiggle) than this coarser "any keyDown, real or synthetic" check,
+    /// so this must not replace it generally — only cover the tap's blind
+    /// spot.
+    func pollSecureInputFallback(recentWindow: TimeInterval = 1.5) {
+        guard isSecureInputActive(), secondsSinceLastKeyDown() < recentWindow else { return }
+        lastRealInputDate = now()
+        onRealInput?()
     }
 
     /// Real hardware input reports sourcePID=0, sourceStateID=1

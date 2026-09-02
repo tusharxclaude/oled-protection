@@ -25,4 +25,54 @@ final class IdleClockTests: XCTestCase {
         clock.markInputNow()
         XCTAssertLessThan(clock.idleInterval, 1)
     }
+
+    func testSecureInputFallbackResetsClockOnRecentKeyDownDuringSecureInput() {
+        var now = Date(timeIntervalSince1970: 1_000)
+        let clock = IdleClock(
+            now: { now },
+            isSecureInputActive: { true },
+            secondsSinceLastKeyDown: { 0.2 }
+        )
+        now = now.addingTimeInterval(200)
+        clock.pollSecureInputFallback()
+        XCTAssertLessThan(clock.idleInterval, 1)
+    }
+
+    func testSecureInputFallbackIgnoredWhenSecureInputNotActive() {
+        var now = Date(timeIntervalSince1970: 1_000)
+        let clock = IdleClock(
+            now: { now },
+            isSecureInputActive: { false },
+            secondsSinceLastKeyDown: { 0.2 }
+        )
+        now = now.addingTimeInterval(200)
+        clock.pollSecureInputFallback()
+        XCTAssertEqual(clock.idleInterval, 200, accuracy: 0.01)
+    }
+
+    func testSecureInputFallbackIgnoredWhenKeyDownIsStale() {
+        var now = Date(timeIntervalSince1970: 1_000)
+        let clock = IdleClock(
+            now: { now },
+            isSecureInputActive: { true },
+            secondsSinceLastKeyDown: { 30 }
+        )
+        now = now.addingTimeInterval(200)
+        clock.pollSecureInputFallback()
+        XCTAssertEqual(clock.idleInterval, 200, accuracy: 0.01)
+    }
+
+    func testSecureInputFallbackFiresOnRealInputCallback() {
+        var now = Date(timeIntervalSince1970: 1_000)
+        let clock = IdleClock(
+            now: { now },
+            isSecureInputActive: { true },
+            secondsSinceLastKeyDown: { 0.2 }
+        )
+        var fired = false
+        clock.onRealInput = { fired = true }
+        now = now.addingTimeInterval(200)
+        clock.pollSecureInputFallback()
+        XCTAssertTrue(fired)
+    }
 }
