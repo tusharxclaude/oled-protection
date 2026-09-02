@@ -12,17 +12,13 @@ final class BlackoutController {
 
     private var overlayWindows: [BlackoutWindow] = []
     private let hasInputMonitoringAccess: () -> Bool
-    private let activateApp: () -> Void
 
     var isBlackedOut: Bool { !overlayWindows.isEmpty }
     var windowCount: Int { overlayWindows.count }
+    var isAnyWindowKey: Bool { overlayWindows.contains { $0.isKeyWindow } }
 
-    init(
-        hasInputMonitoringAccess: @escaping () -> Bool = CGPreflightListenEventAccess,
-        activateApp: @escaping () -> Void = { NSApp.activate(ignoringOtherApps: true) }
-    ) {
+    init(hasInputMonitoringAccess: @escaping () -> Bool = CGPreflightListenEventAccess) {
         self.hasInputMonitoringAccess = hasInputMonitoringAccess
-        self.activateApp = activateApp
     }
 
     func show(on screens: [NSScreen]) {
@@ -33,8 +29,7 @@ final class BlackoutController {
                 contentRect: screen.frame,
                 styleMask: .borderless,
                 backing: .buffered,
-                defer: false,
-                screen: screen
+                defer: false
             )
             window.backgroundColor = .black
             window.level = .screenSaver
@@ -52,24 +47,26 @@ final class BlackoutController {
         // real keyDown/mouseMoved — Escape included — straight to
         // AppDelegate.handleRealInput(), independent of window key status.
         // Grabbing focus here is therefore unnecessary *and* has a real
-        // cost: NSApp.activate(ignoringOtherApps:) makes OLEDGuard the
-        // system-wide frontmost app for as long as the screen stays
-        // blacked out (often hours), and there's no public API for other
-        // apps to find who really owns Secure Input — Logitech Options
-        // appears to fall back to blaming whichever app is currently
-        // frontmost, which pinned it on OLEDGuard. So stay non-key here.
+        // cost: becoming frontmost for as long as the screen stays blacked
+        // out (often hours) means any background app that enables macOS
+        // Secure Input during that window — there's no public API for
+        // other apps to find who really owns it — gets misattributed to
+        // whoever is frontmost, which pinned it on OLEDGuard via Logitech
+        // Options. So stay non-key here.
         //
         // Only fall back to grabbing key-window status (needed for plain
         // AppKit keyDown to reach BlackoutWindow.onEscape) if Input
         // Monitoring has lapsed *after* launch — e.g. the user revokes it
         // in System Settings, or a rebuild changes the code signature and
         // TCC silently drops the grant — which leaves the event tap blind.
+        // BlackoutWindow is a `.nonactivatingPanel`, so even this fallback
+        // never activates the app: it can hold key status and receive the
+        // Escape keyDown while a different app stays frontmost.
         if hasInputMonitoringAccess() {
             for window in overlayWindows {
                 window.orderFrontRegardless()
             }
         } else {
-            activateApp()
             overlayWindows.first?.makeKeyAndOrderFront(nil)
             for window in overlayWindows.dropFirst() {
                 window.orderFrontRegardless()
